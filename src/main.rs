@@ -1,10 +1,9 @@
 use color_eyre::Report;
 use std::future::Future;
-use std::pin::Pin;
 
 #[tokio::main]
 async fn main() {
-    let tup = try_join(Box::pin(do_stuff()), Box::pin(do_more_stuff())).await;
+    let tup = try_join(do_stuff(), do_more_stuff()).await;
     dbg!(&tup);
 }
 
@@ -19,10 +18,11 @@ async fn do_more_stuff() -> Result<String, Report> {
 }
 
 // TODO: return as soon as either future returns an error
-async fn try_join<A, B, E>(
-    a: Pin<Box<dyn Future<Output = Result<A, E>>>>,
-    b: Pin<Box<dyn Future<Output = Result<B, E>>>>,
-) -> Result<(A, B), E> {
+async fn try_join<A, B, AR, BR, E>(a: A, b: B) -> Result<(AR, BR), E>
+where
+    A: Future<Output = Result<AR, E>>,
+    B: Future<Output = Result<BR, E>>,
+{
     let a = a.await?;
     let b = b.await?;
 
