@@ -57,6 +57,7 @@ where
 enum MaybeResult<F, T> {
     Future(F),
     Result(T),
+    Gone,
 }
 
 impl<F, T> MaybeResult<F, T> {
@@ -64,6 +65,7 @@ impl<F, T> MaybeResult<F, T> {
         match self {
             Self::Future(f) => MaybeResult::Future(f),
             Self::Result(t) => MaybeResult::Result(t),
+            Self::Gone => MaybeResult::Gone,
         }
     }
 }
@@ -93,7 +95,8 @@ where
                 }
             }
             MaybeResult::Result(_) => {}
-        }
+            MaybeResult::Gone => unreachable!(),
+        };
 
         match this.b.as_mut() {
             MaybeResult::Future(mut b) => {
@@ -107,10 +110,26 @@ where
                 }
             }
             MaybeResult::Result(_) => {}
+            MaybeResult::Gone => unreachable!(),
         }
 
-        if let (MaybeResult::Result(a), MaybeResult::Result(b)) = (this.a.as_mut(), this.b.as_mut())
+        if let (MaybeResult::Result(_), MaybeResult::Result(_)) = (this.a.as_mut(), this.b.as_mut())
         {
+            let mut a = MaybeResult::Gone;
+            let mut b = MaybeResult::Gone;
+
+            std::mem::swap(&mut a, &mut this.a);
+            std::mem::swap(&mut b, &mut this.b);
+
+            let a = match a {
+                MaybeResult::Result(a) => a,
+                _ => unreachable!(),
+            };
+            let b = match b {
+                MaybeResult::Result(b) => b,
+                _ => unreachable!(),
+            };
+
             Poll::Ready(Ok((a, b)))
         } else {
             Poll::Pending
