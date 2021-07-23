@@ -48,12 +48,30 @@ where
     type Output = Result<(AR, BR), E>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let a = Pin::new(&mut self.a);
-        let b = Pin::new(&mut self.b);
+        // Pin<&mut T> => &mut T
+        let this: &mut Self = &mut self;
 
-        a.poll(cx);
-        b.poll(cx);
+        let a = Pin::new(&mut this.a);
+        let b = Pin::new(&mut this.b);
 
-        Poll::Pending
+        match a.poll(cx) {
+            Poll::Pending => match b.poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(b) => match b {
+                    Err(e) => Poll::Ready(Err(e)),
+                    Ok(_) => Poll::Pending,
+                },
+            },
+            Poll::Ready(a) => match a {
+                Err(e) => Poll::Ready(Err(e)),
+                Ok(a) => match b.poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(b) => match b {
+                        Err(e) => Poll::Ready(Err(e)),
+                        Ok(b) => Poll::Ready(Ok((a, b))),
+                    },
+                },
+            },
+        }
     }
 }
