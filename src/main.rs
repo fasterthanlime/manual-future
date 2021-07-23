@@ -1,10 +1,10 @@
 use color_eyre::{eyre::eyre, Report};
-use std::{future::Future, pin::Pin, time::Duration};
+use std::{future::Future, time::Duration};
 
 #[tokio::main]
 async fn main() {
     println!("Ok we're off!");
-    let tup = try_join(do_stuff(), do_more_stuff()).await;
+    let tup = try_join_correct(do_more_stuff(), do_stuff()).await;
     println!("And we're done");
     dbg!(&tup);
 }
@@ -15,7 +15,7 @@ async fn do_stuff() -> Result<u64, Report> {
 }
 
 async fn do_more_stuff() -> Result<String, Report> {
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
     Ok("nice number".into())
 }
 
@@ -24,27 +24,15 @@ async fn try_join<AR, BR, E>(
     a: impl Future<Output = Result<AR, E>>,
     b: impl Future<Output = Result<BR, E>>,
 ) -> Result<(AR, BR), E> {
-    tokio::pin!(a);
-    tokio::pin!(b);
+    let a = a.await?;
+    let b = b.await?;
 
-    tokio::select! {
-        a = a.as_mut() => {
-            match a {
-                Ok(a) => {
-                    let b = b.await?;
-                    Ok((a, b))
-                },
-                Err(e) => Err(e),
-            }
-        },
-        b = b.as_mut() => {
-            match b {
-                Ok(b) => {
-                    let a = a.await?;
-                    Ok((a, b))
-                },
-                Err(e) => Err(e),
-            }
-        },
-    }
+    Ok((a, b))
+}
+
+fn try_join_correct<AR, BR, E>(
+    a: impl Future<Output = Result<AR, E>>,
+    b: impl Future<Output = Result<BR, E>>,
+) -> impl Future<Output = Result<(AR, BR), E>> {
+    try_join(a, b)
 }
