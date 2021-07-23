@@ -50,16 +50,22 @@ where
     AR: Unpin,
     BR: Unpin,
 {
-    a: MaybeResult<A, AR, E>,
-    b: MaybeResult<B, BR, E>,
+    a: MaybeResult<A, AR>,
+    b: MaybeResult<B, BR>,
 }
 
-enum MaybeResult<F, T, E>
-where
-    F: Future<Output = Result<T, E>>,
-{
+enum MaybeResult<F, T> {
     Future(F),
     Result(T),
+}
+
+impl<F, T> MaybeResult<F, T> {
+    fn as_mut(&mut self) -> MaybeResult<&mut F, &mut T> {
+        match self {
+            Self::Future(f) => MaybeResult::Future(f),
+            Self::Result(t) => MaybeResult::Result(t),
+        }
+    }
 }
 
 impl<A, B, AR, BR, E> Future for TryFuture<A, B, AR, BR, E>
@@ -75,7 +81,7 @@ where
         // Pin<&mut T> => &mut T
         let this: &mut Self = &mut self;
 
-        match this.a {
+        match this.a.as_mut() {
             MaybeResult::Future(mut a) => {
                 let a = Pin::new(&mut a);
                 match a.poll(cx) {
@@ -86,10 +92,10 @@ where
                     Poll::Pending => {}
                 }
             }
-            MaybeResult::Result(_) => todo!(),
+            MaybeResult::Result(_) => {}
         }
 
-        match this.b {
+        match this.b.as_mut() {
             MaybeResult::Future(mut b) => {
                 let b = Pin::new(&mut b);
                 match b.poll(cx) {
@@ -100,10 +106,11 @@ where
                     Poll::Pending => {}
                 }
             }
-            MaybeResult::Result(_) => todo!(),
+            MaybeResult::Result(_) => {}
         }
 
-        if let (MaybeResult::Result(a), MaybeResult::Result(b)) = (this.a, this.b) {
+        if let (MaybeResult::Result(a), MaybeResult::Result(b)) = (this.a.as_mut(), this.b.as_mut())
+        {
             Poll::Ready(Ok((a, b)))
         } else {
             Poll::Pending
