@@ -38,10 +38,8 @@ where
     BR: Unpin,
 {
     TryFuture {
-        a,
-        b,
-        a_result: None,
-        b_result: None,
+        a: MaybeResult::Future(a),
+        b: MaybeResult::Future(b),
     }
 }
 
@@ -52,10 +50,16 @@ where
     AR: Unpin,
     BR: Unpin,
 {
-    a: A,
-    b: B,
-    a_result: Option<AR>,
-    b_result: Option<BR>,
+    a: MaybeResult<A, AR, E>,
+    b: MaybeResult<B, BR, E>,
+}
+
+enum MaybeResult<F, T, E>
+where
+    F: Future<Output = Result<T, E>>,
+{
+    Future(F),
+    Result(T),
 }
 
 impl<A, B, AR, BR, E> Future for TryFuture<A, B, AR, BR, E>
@@ -71,31 +75,35 @@ where
         // Pin<&mut T> => &mut T
         let this: &mut Self = &mut self;
 
-        if this.a_result.is_none() {
-            let a = Pin::new(&mut this.a);
-            match a.poll(cx) {
-                Poll::Ready(a) => match a {
-                    Ok(a) => this.a_result = Some(a),
-                    Err(e) => return Poll::Ready(Err(e)),
-                },
-                Poll::Pending => {}
+        match this.a {
+            MaybeResult::Future(mut a) => {
+                let a = Pin::new(&mut a);
+                match a.poll(cx) {
+                    Poll::Ready(a) => match a {
+                        Ok(a) => this.a = MaybeResult::Result(a),
+                        Err(e) => return Poll::Ready(Err(e)),
+                    },
+                    Poll::Pending => {}
+                }
             }
+            MaybeResult::Result(_) => todo!(),
         }
 
-        if this.b_result.is_none() {
-            let b = Pin::new(&mut this.b);
-            match b.poll(cx) {
-                Poll::Ready(b) => match b {
-                    Ok(b) => this.b_result = Some(b),
-                    Err(e) => return Poll::Ready(Err(e)),
-                },
-                Poll::Pending => {}
+        match this.b {
+            MaybeResult::Future(mut b) => {
+                let b = Pin::new(&mut b);
+                match b.poll(cx) {
+                    Poll::Ready(b) => match b {
+                        Ok(b) => this.b = MaybeResult::Result(b),
+                        Err(e) => return Poll::Ready(Err(e)),
+                    },
+                    Poll::Pending => {}
+                }
             }
+            MaybeResult::Result(_) => todo!(),
         }
 
-        if let (Some(_), Some(_)) = (&this.a_result, &this.b_result) {
-            // unwrap rationale: we just checked both `a_result` and `b_result` were `Some`
-            let (a, b) = (this.a_result.take().unwrap(), this.b_result.take().unwrap());
+        if let (MaybeResult::Result(a), MaybeResult::Result(b)) = (this.a, this.b) {
             Poll::Ready(Ok((a, b)))
         } else {
             Poll::Pending
