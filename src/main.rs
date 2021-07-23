@@ -17,14 +17,12 @@ async fn do_more_stuff() -> Result<String, Report> {
     // Err(eyre!("this don't work"))
 }
 
-// TODO: return as soon as either future returns an error
-async fn try_join<A, B, AR, BR, E>(a: A, b: B) -> Result<(AR, BR), E>
-where
-    A: Future<Output = Result<AR, E>>,
-    B: Future<Output = Result<BR, E>>,
-{
+// TODO: return as soon as either future returns Err
+async fn try_join<AR, BR, E>(
+    a: impl Future<Output = Result<AR, E>>,
+    b: impl Future<Output = Result<BR, E>>,
+) -> Result<(AR, BR), E> {
     let a = a.await?;
     let b = b.await?;
-
     Ok((a, b))
 }
