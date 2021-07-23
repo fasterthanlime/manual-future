@@ -71,10 +71,8 @@ where
         // Pin<&mut T> => &mut T
         let this: &mut Self = &mut self;
 
-        let a = Pin::new(&mut this.a);
-        let b = Pin::new(&mut this.b);
-
         if this.a_result.is_none() {
+            let a = Pin::new(&mut this.a);
             match a.poll(cx) {
                 Poll::Ready(a) => match a {
                     Ok(a) => this.a_result = Some(a),
@@ -85,6 +83,7 @@ where
         }
 
         if this.b_result.is_none() {
+            let b = Pin::new(&mut this.b);
             match b.poll(cx) {
                 Poll::Ready(b) => match b {
                     Ok(b) => this.b_result = Some(b),
