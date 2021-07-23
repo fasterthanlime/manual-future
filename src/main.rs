@@ -14,14 +14,14 @@ async fn main() {
     dbg!(&tup);
 }
 
-async fn do_stuff() -> Result<u64, Report> {
-    tokio::time::sleep(Duration::from_millis(20)).await;
-    Err(eyre!("this don't work"))
-}
-
 async fn do_more_stuff() -> Result<String, Report> {
     tokio::time::sleep(Duration::from_secs(3)).await;
     Ok("nice number".into())
+}
+
+async fn do_stuff() -> Result<u64, Report> {
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    Err(eyre!("this don't work"))
 }
 
 fn try_join_correct<AR, BR, E>(
