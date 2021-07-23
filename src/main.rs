@@ -54,24 +54,10 @@ where
         let a = Pin::new(&mut this.a);
         let b = Pin::new(&mut this.b);
 
-        match a.poll(cx) {
-            Poll::Pending => match b.poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(b) => match b {
-                    Err(e) => Poll::Ready(Err(e)),
-                    Ok(_) => Poll::Pending,
-                },
-            },
-            Poll::Ready(a) => match a {
-                Err(e) => Poll::Ready(Err(e)),
-                Ok(a) => match b.poll(cx) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(b) => match b {
-                        Err(e) => Poll::Ready(Err(e)),
-                        Ok(b) => Poll::Ready(Ok((a, b))),
-                    },
-                },
-            },
+        match (a.poll(cx), b.poll(cx)) {
+            (Poll::Ready(Err(e)), _) | (_, Poll::Ready(Err(e))) => Poll::Ready(Err(e)),
+            (Poll::Ready(Ok(a)), Poll::Ready(Ok(b))) => Poll::Ready(Ok((a, b))),
+            (Poll::Pending, _) | (_, Poll::Pending) => Poll::Pending,
         }
     }
 }
