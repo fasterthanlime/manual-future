@@ -21,11 +21,11 @@ async fn do_more_stuff() -> Result<String, Report> {
 
 // TODO: return as soon as either future returns Err
 async fn try_join<AR, BR, E>(
-    mut a: impl Future<Output = Result<AR, E>>,
-    mut b: impl Future<Output = Result<BR, E>>,
+    a: impl Future<Output = Result<AR, E>>,
+    b: impl Future<Output = Result<BR, E>>,
 ) -> Result<(AR, BR), E> {
-    let mut a = unsafe { Pin::new_unchecked(&mut a) };
-    let mut b = unsafe { Pin::new_unchecked(&mut b) };
+    tokio::pin!(a);
+    tokio::pin!(b);
 
     tokio::select! {
         a = a.as_mut() => {
