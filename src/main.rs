@@ -1,10 +1,15 @@
 use color_eyre::{eyre::eyre, Report};
-use std::{future::Future, time::Duration};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 #[tokio::main]
 async fn main() {
     println!("Ok we're off!");
-    let tup = try_join_correct(do_more_stuff(), do_stuff()).await;
+    let tup = try_join_correct(Box::pin(do_more_stuff()), Box::pin(do_stuff())).await;
     println!("And we're done");
     dbg!(&tup);
 }
@@ -19,20 +24,36 @@ async fn do_more_stuff() -> Result<String, Report> {
     Ok("nice number".into())
 }
 
-// TODO: return as soon as either future returns Err
-async fn try_join<AR, BR, E>(
-    a: impl Future<Output = Result<AR, E>>,
-    b: impl Future<Output = Result<BR, E>>,
-) -> Result<(AR, BR), E> {
-    let a = a.await?;
-    let b = b.await?;
-
-    Ok((a, b))
+fn try_join_correct<AR, BR, E>(
+    a: impl Future<Output = Result<AR, E>> + Unpin,
+    b: impl Future<Output = Result<BR, E>> + Unpin,
+) -> impl Future<Output = Result<(AR, BR), E>> {
+    TryFuture { a, b }
 }
 
-fn try_join_correct<AR, BR, E>(
-    a: impl Future<Output = Result<AR, E>>,
-    b: impl Future<Output = Result<BR, E>>,
-) -> impl Future<Output = Result<(AR, BR), E>> {
-    try_join(a, b)
+struct TryFuture<A, B, AR, BR, E>
+where
+    A: Future<Output = Result<AR, E>> + Unpin,
+    B: Future<Output = Result<BR, E>> + Unpin,
+{
+    a: A,
+    b: B,
+}
+
+impl<A, B, AR, BR, E> Future for TryFuture<A, B, AR, BR, E>
+where
+    A: Future<Output = Result<AR, E>> + Unpin,
+    B: Future<Output = Result<BR, E>> + Unpin,
+{
+    type Output = Result<(AR, BR), E>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let a = Pin::new(&mut self.a);
+        let b = Pin::new(&mut self.b);
+
+        a.poll(cx);
+        b.poll(cx);
+
+        Poll::Pending
+    }
 }
