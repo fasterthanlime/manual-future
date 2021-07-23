@@ -9,12 +9,12 @@ use std::{
 #[tokio::main]
 async fn main() {
     println!("Ok we're off!");
-    let tup = try_join_correct(Box::pin(do_more_stuff()), Box::pin(do_stuff())).await;
+    let tup = try_join_correct(do_more_stuff(), do_stuff()).await;
     println!("And we're done");
     dbg!(&tup);
 
     println!("Ok we're off!");
-    let tup = try_join_correct(Box::pin(do_stuff()), Box::pin(do_more_stuff())).await;
+    let tup = try_join_correct(do_stuff(), do_more_stuff()).await;
     println!("And we're done");
     dbg!(&tup);
 }
@@ -30,13 +30,9 @@ async fn do_stuff() -> Result<u64, Report> {
 }
 
 fn try_join_correct<AR, BR, E>(
-    a: impl Future<Output = Result<AR, E>> + Unpin,
-    b: impl Future<Output = Result<BR, E>> + Unpin,
-) -> impl Future<Output = Result<(AR, BR), E>>
-where
-    AR: Unpin,
-    BR: Unpin,
-{
+    a: impl Future<Output = Result<AR, E>>,
+    b: impl Future<Output = Result<BR, E>>,
+) -> impl Future<Output = Result<(AR, BR), E>> {
     TryFuture {
         a: MaybeResult::Future(a),
         b: MaybeResult::Future(b),
@@ -45,10 +41,8 @@ where
 
 struct TryFuture<A, B, AR, BR, E>
 where
-    A: Future<Output = Result<AR, E>> + Unpin,
-    B: Future<Output = Result<BR, E>> + Unpin,
-    AR: Unpin,
-    BR: Unpin,
+    A: Future<Output = Result<AR, E>>,
+    B: Future<Output = Result<BR, E>>,
 {
     a: MaybeResult<A, AR>,
     b: MaybeResult<B, BR>,
@@ -72,20 +66,17 @@ impl<F, T> MaybeResult<F, T> {
 
 impl<A, B, AR, BR, E> Future for TryFuture<A, B, AR, BR, E>
 where
-    A: Future<Output = Result<AR, E>> + Unpin,
-    B: Future<Output = Result<BR, E>> + Unpin,
-    AR: Unpin,
-    BR: Unpin,
+    A: Future<Output = Result<AR, E>>,
+    B: Future<Output = Result<BR, E>>,
 {
     type Output = Result<(AR, BR), E>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // Pin<&mut T> => &mut T
-        let this: &mut Self = &mut self;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = unsafe { self.get_unchecked_mut() };
 
         match this.a.as_mut() {
-            MaybeResult::Future(mut a) => {
-                let a = Pin::new(&mut a);
+            MaybeResult::Future(a) => {
+                let a = unsafe { Pin::new_unchecked(a) };
                 match a.poll(cx) {
                     Poll::Ready(a) => match a {
                         Ok(a) => this.a = MaybeResult::Result(a),
@@ -99,8 +90,8 @@ where
         };
 
         match this.b.as_mut() {
-            MaybeResult::Future(mut b) => {
-                let b = Pin::new(&mut b);
+            MaybeResult::Future(b) => {
+                let b = unsafe { Pin::new_unchecked(b) };
                 match b.poll(cx) {
                     Poll::Ready(b) => match b {
                         Ok(b) => this.b = MaybeResult::Result(b),
